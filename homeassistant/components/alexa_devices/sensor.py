@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Final
 
 from aioamazondevices.api import AmazonDevice
@@ -57,6 +58,19 @@ SENSORS: Final = (
     ),
 )
 
+NOTIFICATION_SENSORS: Final = (
+    AmazonSensorEntityDescription(
+        key="next_timer",
+        translation_key="next_timer",
+        device_class=SensorDeviceClass.TIMESTAMP,
+    ),
+    AmazonSensorEntityDescription(
+        key="next_alarm",
+        translation_key="next_alarm",
+        device_class=SensorDeviceClass.TIMESTAMP,
+    ),
+)
+
 
 async def async_setup_entry(
     hass: HomeAssistant,
@@ -79,6 +93,11 @@ async def async_setup_entry(
                 for sensor_desc in SENSORS
                 for serial_num in new_devices
                 if coordinator.data[serial_num].sensors.get(sensor_desc.key) is not None
+            )
+            async_add_entities(
+                AmazonNotificationSensorEntity(coordinator, serial_num, sensor_desc)
+                for sensor_desc in NOTIFICATION_SENSORS
+                for serial_num in new_devices
             )
 
     _check_device()
@@ -114,3 +133,37 @@ class AmazonSensorEntity(AmazonEntity, SensorEntity):
             )
             and super().available
         )
+
+
+class AmazonNotificationSensorEntity(AmazonEntity, SensorEntity):
+    """Notification sensor device."""
+
+    entity_description: AmazonSensorEntityDescription
+
+    @property
+    def native_value(self) -> datetime | None:
+        """Return the state of the sensor."""
+        # TODO: Support other notification types  # pylint: disable=fixme
+        if self.entity_description.key not in ("next_timer", "next_alarm"):
+            return None
+
+        notif_map = {
+            "next_alarm": "Alarm",
+            "next_timer": "Timer",
+        }
+
+        return (
+            notif.next_occurrence
+            if (
+                notif := self.device.notifications.get(
+                    notif_map[self.entity_description.key]
+                )
+            )
+            is not None
+            else None
+        )
+
+    @property
+    def available(self) -> bool:
+        """Return if entity is available."""
+        return super().available
