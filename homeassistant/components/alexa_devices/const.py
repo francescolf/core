@@ -26,3 +26,9 @@ COUNTRY_DOMAINS = {
     "us": DEFAULT_DOMAIN,
     "za": "co.za",
 }
+
+NOTIFICATIONS_MAP = {
+    "next_alarm": "Alarm",
+    "next_timer": "Timer",
+    "next_reminder": "Reminder",
+}

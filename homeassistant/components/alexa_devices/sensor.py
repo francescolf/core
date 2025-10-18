@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Final
+from typing import Any, Final
 
 from aioamazondevices.api import AmazonDevice
 
@@ -20,6 +20,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.helpers.typing import StateType
 
+from .const import NOTIFICATIONS_MAP
 from .coordinator import AmazonConfigEntry
 from .entity import AmazonEntity
 
@@ -63,11 +64,19 @@ NOTIFICATION_SENSORS: Final = (
         key="next_timer",
         translation_key="next_timer",
         device_class=SensorDeviceClass.TIMESTAMP,
+        icon="mdi:timer",
     ),
     AmazonSensorEntityDescription(
         key="next_alarm",
         translation_key="next_alarm",
         device_class=SensorDeviceClass.TIMESTAMP,
+        icon="mdi:alarm",
+    ),
+    AmazonSensorEntityDescription(
+        key="next_reminder",
+        translation_key="next_reminder",
+        device_class=SensorDeviceClass.TIMESTAMP,
+        icon="mdi:bell-outline",
     ),
 )
 
@@ -143,20 +152,12 @@ class AmazonNotificationSensorEntity(AmazonEntity, SensorEntity):
     @property
     def native_value(self) -> datetime | None:
         """Return the state of the sensor."""
-        # TODO: Support other notification types  # pylint: disable=fixme
-        if self.entity_description.key not in ("next_timer", "next_alarm"):
-            return None
-
-        notif_map = {
-            "next_alarm": "Alarm",
-            "next_timer": "Timer",
-        }
 
         return (
             notif.next_occurrence
             if (
                 notif := self.device.notifications.get(
-                    notif_map[self.entity_description.key]
+                    NOTIFICATIONS_MAP[self.entity_description.key]
                 )
             )
             is not None
@@ -167,3 +168,19 @@ class AmazonNotificationSensorEntity(AmazonEntity, SensorEntity):
     def available(self) -> bool:
         """Return if entity is available."""
         return super().available
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any] | None:
+        """Return extra state attributes for notification sensors."""
+
+        label = (
+            notif.label
+            if (
+                notif := self.device.notifications.get(
+                    NOTIFICATIONS_MAP[self.entity_description.key]
+                )
+            )
+            is not None
+            else None
+        )
+        return {"label": label}

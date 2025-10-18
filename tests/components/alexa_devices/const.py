@@ -1,6 +1,8 @@
 """Alexa Devices tests const."""
 
-from aioamazondevices.api import AmazonDevice, AmazonDeviceSensor
+import datetime
+
+from aioamazondevices.api import AmazonDevice, AmazonDeviceSensor, AmazonSchedule
 
 TEST_CODE = "023123"
 TEST_PASSWORD = "fake_password"
@@ -39,6 +41,44 @@ TEST_DEVICE_1 = AmazonDevice(
             scale="CELSIUS",
         ),
     },
+    notifications={
+        "Reminder": AmazonSchedule(
+            type="Reminder",
+            status="ON",
+            label="Test reminder",
+            next_occurrence=datetime.datetime(
+                2025,
+                1,
+                1,
+                12,
+                tzinfo=datetime.timezone(datetime.timedelta(seconds=7200), "CEST"),
+            ),
+        ),
+        "Alarm": AmazonSchedule(
+            type="Alarm",
+            status="ON",
+            label="Test alarm",
+            next_occurrence=datetime.datetime(
+                2025,
+                1,
+                1,
+                8,
+                tzinfo=datetime.timezone(datetime.timedelta(seconds=7200), "CEST"),
+            ),
+        ),
+        "Timer": AmazonSchedule(
+            type="Timer",
+            status="ON",
+            label="Test timer",
+            next_occurrence=datetime.datetime(
+                2025,
+                1,
+                1,
+                9,
+                tzinfo=datetime.timezone(datetime.timedelta(seconds=7200), "CEST"),
+            ),
+        ),
+    },
 )
 
 TEST_DEVICE_2_SN = "echo_test_2_serial_number"
@@ -65,5 +105,43 @@ TEST_DEVICE_2 = AmazonDevice(
             error_type=None,
             scale="CELSIUS",
         )
+    },
+    notifications={
+        "Reminder": AmazonSchedule(
+            type="Reminder",
+            status="ON",
+            label="Test reminder",
+            next_occurrence=datetime.datetime(
+                2025,
+                1,
+                1,
+                12,
+                tzinfo=datetime.timezone(datetime.timedelta(seconds=7200), "CEST"),
+            ),
+        ),
+        "Alarm": AmazonSchedule(
+            type="Alarm",
+            status="ON",
+            label="Test alarm",
+            next_occurrence=datetime.datetime(
+                2025,
+                1,
+                1,
+                8,
+                tzinfo=datetime.timezone(datetime.timedelta(seconds=7200), "CEST"),
+            ),
+        ),
+        "Timer": AmazonSchedule(
+            type="Timer",
+            status="ON",
+            label="Test timer",
+            next_occurrence=datetime.datetime(
+                2025,
+                1,
+                1,
+                9,
+                tzinfo=datetime.timezone(datetime.timedelta(seconds=7200), "CEST"),
+            ),
+        ),
     },
 )

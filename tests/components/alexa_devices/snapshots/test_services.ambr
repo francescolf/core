@@ -17,6 +17,26 @@
         'endpoint_id': 'G1234567890123456789012345678A',
         'entity_id': '11111111-2222-3333-4444-555555555555',
         'household_device': False,
+        'notifications': dict({
+          'Alarm': dict({
+            'label': 'Test alarm',
+            'next_occurrence': datetime.datetime(2025, 1, 1, 8, 0, tzinfo=datetime.timezone(datetime.timedelta(seconds=7200), 'CEST')),
+            'status': 'ON',
+            'type': 'Alarm',
+          }),
+          'Reminder': dict({
+            'label': 'Test reminder',
+            'next_occurrence': datetime.datetime(2025, 1, 1, 12, 0, tzinfo=datetime.timezone(datetime.timedelta(seconds=7200), 'CEST')),
+            'status': 'ON',
+            'type': 'Reminder',
+          }),
+          'Timer': dict({
+            'label': 'Test timer',
+            'next_occurrence': datetime.datetime(2025, 1, 1, 9, 0, tzinfo=datetime.timezone(datetime.timedelta(seconds=7200), 'CEST')),
+            'status': 'ON',
+            'type': 'Timer',
+          }),
+        }),
         'online': True,
         'sensors': dict({
           'dnd': dict({
@@ -63,6 +83,26 @@
         'endpoint_id': 'G1234567890123456789012345678A',
         'entity_id': '11111111-2222-3333-4444-555555555555',
         'household_device': False,
+        'notifications': dict({
+          'Alarm': dict({
+            'label': 'Test alarm',
+            'next_occurrence': datetime.datetime(2025, 1, 1, 8, 0, tzinfo=datetime.timezone(datetime.timedelta(seconds=7200), 'CEST')),
+            'status': 'ON',
+            'type': 'Alarm',
+          }),
+          'Reminder': dict({
+            'label': 'Test reminder',
+            'next_occurrence': datetime.datetime(2025, 1, 1, 12, 0, tzinfo=datetime.timezone(datetime.timedelta(seconds=7200), 'CEST')),
+            'status': 'ON',
+            'type': 'Reminder',
+          }),
+          'Timer': dict({
+            'label': 'Test timer',
+            'next_occurrence': datetime.datetime(2025, 1, 1, 9, 0, tzinfo=datetime.timezone(datetime.timedelta(seconds=7200), 'CEST')),
+            'status': 'ON',
+            'type': 'Timer',
+          }),
+        }),
         'online': True,
         'sensors': dict({
           'dnd': dict({

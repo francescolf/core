@@ -1,9 +1,10 @@
 """Tests for the Alexa Devices sensor platform."""
 
+import datetime
 from typing import Any
 from unittest.mock import AsyncMock, patch
 
-from aioamazondevices.api import AmazonDeviceSensor
+from aioamazondevices.api import AmazonDeviceSensor, AmazonSchedule
 from aioamazondevices.exceptions import (
     CannotAuthenticate,
     CannotConnect,
@@ -14,7 +15,7 @@ import pytest
 from syrupy.assertion import SnapshotAssertion
 
 from homeassistant.components.alexa_devices.coordinator import SCAN_INTERVAL
-from homeassistant.const import STATE_UNAVAILABLE, Platform
+from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN, Platform
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import entity_registry as er
 
@@ -179,3 +180,159 @@ async def test_sensor_unavailable(
 
     assert (state := hass.states.get(entity_id))
     assert state.state == STATE_UNAVAILABLE
+
+
+async def test_notification_timestamp_sensors(
+    hass: HomeAssistant,
+    freezer: FrozenDateTimeFactory,
+    mock_amazon_devices_client: AsyncMock,
+    mock_config_entry: MockConfigEntry,
+) -> None:
+    """Test sensors created from device notifications (Timer/Alarm/Reminder)."""
+
+    mock_amazon_devices_client.get_devices_data.return_value[
+        TEST_DEVICE_1_SN
+    ].notifications = {
+        "Timer": AmazonSchedule(
+            type="Timer",
+            status="ON",
+            label="Test timer",
+            next_occurrence=datetime.datetime(
+                2025,
+                1,
+                1,
+                9,
+                tzinfo=datetime.timezone(datetime.timedelta(seconds=7200), "CEST"),
+            ),
+        ),
+        "Alarm": AmazonSchedule(
+            type="Alarm",
+            status="ON",
+            label="Test alarm",
+            next_occurrence=datetime.datetime(
+                2025,
+                1,
+                1,
+                8,
+                tzinfo=datetime.timezone(datetime.timedelta(seconds=7200), "CEST"),
+            ),
+        ),
+        "Reminder": AmazonSchedule(
+            type="Reminder",
+            status="ON",
+            label="Test reminder",
+            next_occurrence=datetime.datetime(
+                2025,
+                1,
+                1,
+                12,
+                tzinfo=datetime.timezone(datetime.timedelta(seconds=7200), "CEST"),
+            ),
+        ),
+    }
+
+    with patch("homeassistant.components.alexa_devices.PLATFORMS", [Platform.SENSOR]):
+        await setup_integration(hass, mock_config_entry)
+
+    # Check that timestamp sensors exist and have proper attributes
+    timer_entity = hass.states.get("sensor.echo_test_next_timer")
+    alarm_entity = hass.states.get("sensor.echo_test_next_alarm")
+    reminder_entity = hass.states.get("sensor.echo_test_next_reminder")
+
+    assert timer_entity
+    assert alarm_entity
+    assert reminder_entity
+
+    # native state should be stored in UTC; compare as datetimes
+    expected_timer = datetime.datetime(
+        2025,
+        1,
+        1,
+        9,
+        tzinfo=datetime.timezone(datetime.timedelta(seconds=7200), "CEST"),
+    ).astimezone(datetime.UTC)
+    expected_alarm = datetime.datetime(
+        2025,
+        1,
+        1,
+        8,
+        tzinfo=datetime.timezone(datetime.timedelta(seconds=7200), "CEST"),
+    ).astimezone(datetime.UTC)
+    expected_reminder = datetime.datetime(
+        2025,
+        1,
+        1,
+        12,
+        tzinfo=datetime.timezone(datetime.timedelta(seconds=7200), "CEST"),
+    ).astimezone(datetime.UTC)
+
+    assert datetime.datetime.fromisoformat(timer_entity.state) == expected_timer
+    assert datetime.datetime.fromisoformat(alarm_entity.state) == expected_alarm
+    assert datetime.datetime.fromisoformat(reminder_entity.state) == expected_reminder
+
+    # label should be exposed in attributes
+    assert timer_entity.attributes.get("label") == "Test timer"
+    assert alarm_entity.attributes.get("label") == "Test alarm"
+    assert reminder_entity.attributes.get("label") == "Test reminder"
+
+
+async def test_notification_sensors_empty_cases(
+    hass: HomeAssistant,
+    freezer: FrozenDateTimeFactory,
+    mock_amazon_devices_client: AsyncMock,
+    mock_config_entry: MockConfigEntry,
+) -> None:
+    """Test notification sensors behavior when notifications are missing or empty."""
+
+    # Case 1: notifications dict has no Timer/Alarm/Reminder keys -> sensors should be created but state None
+    mock_amazon_devices_client.get_devices_data.return_value[
+        TEST_DEVICE_1_SN
+    ].notifications = {}
+
+    with patch("homeassistant.components.alexa_devices.PLATFORMS", [Platform.SENSOR]):
+        await setup_integration(hass, mock_config_entry)
+
+    timer_entity = hass.states.get("sensor.echo_test_next_timer")
+    alarm_entity = hass.states.get("sensor.echo_test_next_alarm")
+    reminder_entity = hass.states.get("sensor.echo_test_next_reminder")
+
+    # Entities should exist but have no native value
+    assert timer_entity is not None
+    assert alarm_entity is not None
+    assert reminder_entity is not None
+
+    assert timer_entity.state is STATE_UNKNOWN
+    assert alarm_entity.state is STATE_UNKNOWN
+    assert reminder_entity.state is STATE_UNKNOWN
+
+    # Case 2: notification objects present but next_occurrence is None
+    mock_amazon_devices_client.get_devices_data.return_value[
+        TEST_DEVICE_1_SN
+    ].notifications = {
+        "Timer": AmazonSchedule(
+            type="Timer", status="ON", label="No timer", next_occurrence=None
+        ),
+        "Alarm": AmazonSchedule(
+            type="Alarm", status="ON", label="No alarm", next_occurrence=None
+        ),
+        "Reminder": AmazonSchedule(
+            type="Reminder", status="ON", label="No reminder", next_occurrence=None
+        ),
+    }
+
+    # Trigger coordinator refresh so entities pick up new notification values
+    freezer.tick(SCAN_INTERVAL)
+    async_fire_time_changed(hass)
+    await hass.async_block_till_done()
+
+    timer_entity = hass.states.get("sensor.echo_test_next_timer")
+    alarm_entity = hass.states.get("sensor.echo_test_next_alarm")
+    reminder_entity = hass.states.get("sensor.echo_test_next_reminder")
+
+    assert timer_entity
+    assert alarm_entity
+    assert reminder_entity
+
+    assert timer_entity.state is STATE_UNKNOWN
+    assert alarm_entity.state is STATE_UNKNOWN
+    assert reminder_entity.state is STATE_UNKNOWN
