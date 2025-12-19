@@ -1,5 +1,6 @@
 """The tests for components."""
 
+from collections.abc import Iterable
 from enum import StrEnum
 import itertools
 from typing import TypedDict
@@ -29,10 +30,15 @@ from homeassistant.setup import async_setup_component
 from tests.common import MockConfigEntry, mock_device_registry
 
 
-async def target_entities(hass: HomeAssistant, domain: str) -> list[str]:
-    """Create multiple entities associated with different targets."""
-    await async_setup_component(hass, domain, {})
+async def target_entities(
+    hass: HomeAssistant, domain: str
+) -> tuple[list[str], list[str]]:
+    """Create multiple entities associated with different targets.
 
+    Returns a dict with the following keys:
+    - included: List of entity_ids meant to be targeted.
+    - excluded: List of entity_ids not meant to be targeted.
+    """
     config_entry = MockConfigEntry(domain="test")
     config_entry.add_to_hass(hass)
 
@@ -55,7 +61,7 @@ async def target_entities(hass: HomeAssistant, domain: str) -> list[str]:
     mock_device_registry(hass, {device.id: device})
 
     entity_reg = er.async_get(hass)
-    # Entity associated with area
+    # Entities associated with area
     entity_area = entity_reg.async_get_or_create(
         domain=domain,
         platform="test",
@@ -63,8 +69,15 @@ async def target_entities(hass: HomeAssistant, domain: str) -> list[str]:
         suggested_object_id=f"area_{domain}",
     )
     entity_reg.async_update_entity(entity_area.entity_id, area_id=area.id)
+    entity_area_excluded = entity_reg.async_get_or_create(
+        domain=domain,
+        platform="test",
+        unique_id=f"{domain}_area_excluded",
+        suggested_object_id=f"area_{domain}_excluded",
+    )
+    entity_reg.async_update_entity(entity_area_excluded.entity_id, area_id=area.id)
 
-    # Entity associated with device
+    # Entities associated with device
     entity_reg.async_get_or_create(
         domain=domain,
         platform="test",
@@ -72,8 +85,15 @@ async def target_entities(hass: HomeAssistant, domain: str) -> list[str]:
         suggested_object_id=f"device_{domain}",
         device_id=device.id,
     )
+    entity_reg.async_get_or_create(
+        domain=domain,
+        platform="test",
+        unique_id=f"{domain}_device_excluded",
+        suggested_object_id=f"device_{domain}_excluded",
+        device_id=device.id,
+    )
 
-    # Entity associated with label
+    # Entities associated with label
     entity_label = entity_reg.async_get_or_create(
         domain=domain,
         platform="test",
@@ -81,14 +101,31 @@ async def target_entities(hass: HomeAssistant, domain: str) -> list[str]:
         suggested_object_id=f"label_{domain}",
     )
     entity_reg.async_update_entity(entity_label.entity_id, labels={label.label_id})
+    entity_label_excluded = entity_reg.async_get_or_create(
+        domain=domain,
+        platform="test",
+        unique_id=f"{domain}_label_excluded",
+        suggested_object_id=f"label_{domain}_excluded",
+    )
+    entity_reg.async_update_entity(
+        entity_label_excluded.entity_id, labels={label.label_id}
+    )
 
     # Return all available entities
-    return [
-        f"{domain}.standalone_{domain}",
-        f"{domain}.label_{domain}",
-        f"{domain}.area_{domain}",
-        f"{domain}.device_{domain}",
-    ]
+    return {
+        "included": [
+            f"{domain}.standalone_{domain}",
+            f"{domain}.label_{domain}",
+            f"{domain}.area_{domain}",
+            f"{domain}.device_{domain}",
+        ],
+        "excluded": [
+            f"{domain}.standalone_{domain}_excluded",
+            f"{domain}.label_{domain}_excluded",
+            f"{domain}.area_{domain}_excluded",
+            f"{domain}.device_{domain}_excluded",
+        ],
+    }
 
 
 def parametrize_target_entities(domain: str) -> list[tuple[dict, str, int]]:
@@ -112,11 +149,18 @@ def parametrize_target_entities(domain: str) -> list[tuple[dict, str, int]]:
     ]
 
 
-class StateDescription(TypedDict):
+class _StateDescription(TypedDict):
     """Test state and expected service call count."""
 
     state: str | None
     attributes: dict
+
+
+class StateDescription(TypedDict):
+    """Test state and expected service call count."""
+
+    included: _StateDescription
+    excluded: _StateDescription
     count: int
 
 
@@ -147,10 +191,26 @@ def parametrize_trigger_states(
     ) -> dict:
         """Return (state, attributes) dict."""
         if isinstance(state, str) or state is None:
-            return {"state": state, "attributes": additional_attributes, "count": count}
+            return {
+                "included": {
+                    "state": state,
+                    "attributes": additional_attributes,
+                },
+                "excluded": {
+                    "state": state,
+                    "attributes": {},
+                },
+                "count": count,
+            }
         return {
-            "state": state[0],
-            "attributes": state[1] | additional_attributes,
+            "included": {
+                "state": state[0],
+                "attributes": state[1] | additional_attributes,
+            },
+            "excluded": {
+                "state": state[0],
+                "attributes": state[1],
+            },
             "count": count,
         }
 
@@ -286,6 +346,15 @@ def set_or_remove_state(
         )
 
 
-def other_states(state: StrEnum) -> list[str]:
+def other_states(state: StrEnum | Iterable[StrEnum]) -> list[str]:
     """Return a sorted list with all states except the specified one."""
-    return sorted({s.value for s in state.__class__} - {state.value})
+    if isinstance(state, StrEnum):
+        excluded_values = {state.value}
+        enum_class = state.__class__
+    else:
+        if len(state) == 0:
+            raise ValueError("state iterable must not be empty")
+        excluded_values = {s.value for s in state}
+        enum_class = list(state)[0].__class__
+
+    return sorted({s.value for s in enum_class} - excluded_values)
