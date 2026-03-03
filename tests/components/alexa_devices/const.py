@@ -49,6 +49,7 @@ TEST_DEVICE_1 = AmazonDevice(
             scale="CELSIUS",
         ),
     },
+    notifications_supported=True,
     notifications={
         NOTIFICATION_ALARM: AmazonSchedule(
             type=NOTIFICATION_ALARM,
@@ -99,5 +100,6 @@ TEST_DEVICE_2 = AmazonDevice(
             scale="CELSIUS",
         )
     },
+    notifications_supported=False,
     notifications={},
 )
