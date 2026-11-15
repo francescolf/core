@@ -5,6 +5,7 @@ from collections.abc import Awaitable, Callable, Generator
 from copy import deepcopy
 from unittest.mock import AsyncMock, MagicMock, patch
 
+from aioamazondevices.structures import AmazonSchedule
 import pytest
 from pytest_homeassistant.common import MockConfigEntry
 
@@ -17,6 +18,7 @@ from homeassistant.const import CONF_PASSWORD, CONF_USERNAME
 
 from .const import (
     TEST_DEVICE_1,
+    TEST_DEVICE_1_NOTIFICATIONS,
     TEST_DEVICE_1_SENSORS,
     TEST_DEVICE_1_SN,
     TEST_DEVICE_2_SENSORS,
@@ -80,6 +82,7 @@ def mock_amazon_devices_client() -> Generator[AsyncMock]:
         client.on_media_state_event = MagicMock()
         client.on_todo_event = MagicMock()
         client.on_dnd_event = MagicMock()
+        client.on_notification_event = MagicMock()
         client.on_sensor_event = MagicMock()
         dnd_event_handler: list[Callable[[dict[str, bool]], Awaitable[None]]] = []
         client.on_dnd_event.append.side_effect = dnd_event_handler.append
@@ -91,6 +94,25 @@ def mock_amazon_devices_client() -> Generator[AsyncMock]:
             )
 
         client.sync_dnd_state = AsyncMock(side_effect=_sync_dnd_state)
+
+        notification_event_handler: list[
+            Callable[[dict[str, dict[str, AmazonSchedule]]], Awaitable[None]]
+        ] = []
+        client.on_notification_event.append.side_effect = (
+            notification_event_handler.append
+        )
+
+        client.notifications = {
+            TEST_DEVICE_1_SN: deepcopy(TEST_DEVICE_1_NOTIFICATIONS),
+        }
+
+        async def _sync_notifications() -> None:
+            assert notification_event_handler, (
+                "on_notification_event handler was not registered"
+            )
+            await notification_event_handler[0](client.notifications)
+
+        client.sync_notifications = AsyncMock(side_effect=_sync_notifications)
 
         async def _start_http2_processing(*_args, **_kwargs) -> asyncio.Task[None]:
             async def _completed_task() -> None:

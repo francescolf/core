@@ -19,7 +19,13 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers import device_registry as dr
 
 from . import setup_integration
-from .const import TEST_DEVICE_1, TEST_DEVICE_1_SN, TEST_DEVICE_2, TEST_DEVICE_2_SN
+from .const import (
+    TEST_DEVICE_1,
+    TEST_DEVICE_1_NOTIFICATIONS,
+    TEST_DEVICE_1_SN,
+    TEST_DEVICE_2,
+    TEST_DEVICE_2_SN,
+)
 
 
 async def test_coordinator_stale_device(
@@ -86,6 +92,41 @@ async def test_coordinator_stale_device_clears_dnd_state(
     await hass.async_block_till_done()
 
     assert TEST_DEVICE_2_SN not in coordinator.dnd_states
+
+
+async def test_coordinator_stale_device_clears_notifications(
+    hass: HomeAssistant,
+    freezer: FrozenDateTimeFactory,
+    mock_amazon_devices_client: AsyncMock,
+    mock_config_entry: MockConfigEntry,
+) -> None:
+    """Test a removed device's notifications do not linger after resync."""
+    mock_amazon_devices_client.get_devices_data.return_value = {
+        TEST_DEVICE_1_SN: TEST_DEVICE_1,
+        TEST_DEVICE_2_SN: TEST_DEVICE_2,
+    }
+    mock_amazon_devices_client.notifications = {
+        TEST_DEVICE_1_SN: TEST_DEVICE_1_NOTIFICATIONS,
+        TEST_DEVICE_2_SN: TEST_DEVICE_1_NOTIFICATIONS,
+    }
+
+    await setup_integration(hass, mock_config_entry)
+
+    coordinator = mock_config_entry.runtime_data
+    assert TEST_DEVICE_2_SN in coordinator.notifications
+
+    mock_amazon_devices_client.get_devices_data.return_value = {
+        TEST_DEVICE_1_SN: TEST_DEVICE_1,
+    }
+    mock_amazon_devices_client.notifications = {
+        TEST_DEVICE_1_SN: TEST_DEVICE_1_NOTIFICATIONS,
+    }
+
+    freezer.tick(SCAN_INTERVAL)
+    async_fire_time_changed(hass)
+    await hass.async_block_till_done()
+
+    assert TEST_DEVICE_2_SN not in coordinator.notifications
 
 
 async def test_coordinator_load_previous_devices_from_registry(
@@ -197,7 +238,10 @@ async def test_sync_history_state_error(
     assert mock_config_entry.state is expected_state
 
 
-@pytest.mark.parametrize("method_name", ["sync_dnd_state", "sync_media_state"])
+@pytest.mark.parametrize(
+    "method_name",
+    ["sync_dnd_state", "sync_media_state", "sync_notifications"],
+)
 @pytest.mark.parametrize(
     ("side_effect", "expected_state"),
     [
@@ -246,7 +290,7 @@ async def test_sync_state_error(
 
 @pytest.mark.parametrize(
     "method_name",
-    ["sync_dnd_state", "sync_media_state"],
+    ["sync_dnd_state", "sync_media_state", "sync_notifications"],
 )
 @pytest.mark.parametrize(
     "error",
@@ -298,6 +342,7 @@ async def test_device_state_sync_on_device_list_change(
 
     mock_amazon_devices_client.sync_dnd_state.assert_awaited_once()
     mock_amazon_devices_client.sync_media_state.assert_awaited_once()
+    mock_amazon_devices_client.sync_notifications.assert_awaited_once()
 
     mock_amazon_devices_client.get_devices_data.return_value = {
         TEST_DEVICE_1_SN: TEST_DEVICE_1,
@@ -310,6 +355,7 @@ async def test_device_state_sync_on_device_list_change(
 
     assert mock_amazon_devices_client.sync_dnd_state.call_count == 2
     assert mock_amazon_devices_client.sync_media_state.call_count == 2
+    assert mock_amazon_devices_client.sync_notifications.call_count == 2
 
     freezer.tick(SCAN_INTERVAL)
     async_fire_time_changed(hass)
@@ -318,3 +364,4 @@ async def test_device_state_sync_on_device_list_change(
     # Device list unchanged: no additional resync
     assert mock_amazon_devices_client.sync_dnd_state.call_count == 2
     assert mock_amazon_devices_client.sync_media_state.call_count == 2
+    assert mock_amazon_devices_client.sync_notifications.call_count == 2

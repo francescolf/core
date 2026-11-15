@@ -1,9 +1,11 @@
 """Tests for the Alexa Devices sensor platform."""
 
 from copy import deepcopy
+from datetime import UTC, datetime
 from typing import Any
 from unittest.mock import AsyncMock, patch
 
+from aioamazondevices.const.schedules import NOTIFICATION_ALARM
 from aioamazondevices.exceptions import (
     CannotAuthenticate,
     CannotConnect,
@@ -13,6 +15,7 @@ from aioamazondevices.structures import (
     AmazonDevice,
     AmazonDeviceFeature,
     AmazonDeviceSensor,
+    AmazonSchedule,
 )
 from freezegun.api import FrozenDateTimeFactory
 import pytest
@@ -151,6 +154,43 @@ async def test_sensor_push_event(
 
     assert (state := hass.states.get(entity_id))
     assert state.state == "23.5"
+
+
+async def test_notification_push_event(
+    hass: HomeAssistant,
+    mock_amazon_devices_client: AsyncMock,
+    mock_config_entry: MockConfigEntry,
+) -> None:
+    """Test notification sensor state is updated by a pushed notification event."""
+
+    entity_id = "sensor.echo_test_next_alarm"
+
+    await setup_integration(hass, mock_config_entry)
+
+    assert (state := hass.states.get(entity_id))
+    assert state.state == "2023-10-01T07:00:00+00:00"
+
+    mock_amazon_devices_client.on_notification_event.append.assert_called_once()
+    event_handler = (
+        mock_amazon_devices_client.on_notification_event.append.call_args.args[0]
+    )
+    new_alarm_time = datetime(2023, 10, 1, 8, 30, 0, tzinfo=UTC)
+    await event_handler(
+        {
+            TEST_DEVICE_1_SN: {
+                NOTIFICATION_ALARM: AmazonSchedule(
+                    type=NOTIFICATION_ALARM,
+                    status="ON",
+                    label="Morning Alarm",
+                    next_occurrence=new_alarm_time,
+                ),
+            }
+        }
+    )
+    await hass.async_block_till_done()
+
+    assert (state := hass.states.get(entity_id))
+    assert state.state == "2023-10-01T08:30:00+00:00"
 
 
 async def test_device_removed_and_readded(
